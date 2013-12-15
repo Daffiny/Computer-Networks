@@ -24,6 +24,7 @@ def application(environ, start_response):
 		
 	rtt_data = []
 	rtt_list = []
+	rtt_date_time = []
 	 
 	#x-label
 	label = []
@@ -41,12 +42,19 @@ def application(environ, start_response):
 		print >> sys.stderr, len(dirs)
 		k = len(dirs) + 1
 		j = 1
-		for dirName in dirs:
+		dirs.sort(reverse=True)
+		if len(dirs) >= 7:
+			dirs_arrange=dirs[0:7]
+		else:			
+			dirs_arrange=dirs[0:len(dirs)]
+		
 			
-			if skip % 2 == 1:
-				skip=skip+1
-				continue
-			skip = skip + 1
+		for dirName in dirs_arrange:
+			
+			#if skip % 2 == 1:
+			#	skip=skip+1
+			#	continue
+			#skip = skip + 1
 			
 			subdirpath = os.path.join(root, dirName)
 			for subroot, subdirs, subfiles in os.walk(subdirpath):
@@ -78,12 +86,17 @@ def application(environ, start_response):
 						continue
 					elif data["result"]["network"]["measr"]["latency"][0]["rtt_ms"] is None:
 						continue
+					elif not data["result"]["network"]["measr"]["latency"][0]["rtt_ms"]:
+						continue
 					elif data["result"]["timestamp"] is None:
 						continue	
 					
 					latency_data=data["result"]["network"]["measr"]["latency"][0]["rtt_ms"]
 					timestamp_data=data["result"]["timestamp"]
-					tup=(latency_data , timestamp_data, datetime.datetime.fromtimestamp(timestamp_data).strftime('%H:%M'), numpy.average(latency_data))
+					if latency_data is None:
+						print 'None'
+						continue
+					tup=(latency_data , timestamp_data, datetime.datetime.fromtimestamp(timestamp_data).strftime('%H:%M'), numpy.average(numpy.average(latency_data)))
 					rtt_data.append(tup)
 					
 				if len(rtt_data) == 0:
@@ -104,18 +117,23 @@ def application(environ, start_response):
 	 			ax1.set_ylabel('rtt_ms')
 				pylab.xticks(range(0,len(label) - 1),label)
 				ax1.boxplot(rtt_list)
-	 			
-				ax2 = fig.add_subplot(k,1,j + 1)
-				ax2.set_title( dirName + ' latency data time series plot' )
-	 			ax2.set_xlabel('Hour')
-	 			ax2.set_ylabel('rtt_ms')
-				j = j + 2
-				pylab.xticks(range(0,len(label) - 1),label)
-				ax2.plot( avgs )
-				rtt_data = []
-				rtt_list = []
-				avgs = []
-				label = []
+	 		
+	 		
+	 		rtt_date_time.append(numpy.average(avgs))  	
+	 		
+       
+			ax2 = fig.add_subplot(k,1,k,axisbg='grey')
+			ax2.set_title( 'Latency data time series plot' )
+	 		ax2.set_xlabel('Date')
+	 		ax2.set_ylabel('rtt_ms')
+			j = j + 2
+			pylab.xticks(range(0,len(dirs_arrange) + 1),dirs_arrange)
+			ax2.plot( rtt_date_time )
+			
+			rtt_data = []
+			rtt_list = []
+			avgs = []
+			label = []
 	
 	format = 'png'
 	sio = cStringIO.StringIO()
