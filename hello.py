@@ -40,9 +40,7 @@ def application(environ, start_response):
 	dirs = os.listdir( thedir )
 	
 	k = 9
-	
 	m = 0
-	
 	
 	fig = plt.figure(figsize=(15,35)) 
 	fig.subplots_adjust(hspace=0.7)   
