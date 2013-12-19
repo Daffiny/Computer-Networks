@@ -78,7 +78,7 @@ def application(environ, start_response):
 					elif data["result"] is None:
 						continue
 					elif data["result"]["network"] is None:
-						contine
+						continue
 					elif data["result"]["network"]["measr"] is None:
 						continue
 					elif data["result"]["network"]["measr"]["latency"] is None:
@@ -184,7 +184,7 @@ def application(environ, start_response):
        					elif data["latency"][0]["target_ip"] is None:
        						continue
        					elif data["latency"][0]["rtt_ms"] is None:
-       						contine
+       						continue
        					elif not data["latency"][0]["rtt_ms"] :
        						continue
        					elif data["timestamp"] is None:
