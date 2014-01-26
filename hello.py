@@ -18,10 +18,10 @@ from scipy.stats import pearsonr
 
 def application(environ, start_response):
     
+    #from __future__ import division
     def LevenshteinDistance( a, b ):
         len_a = len(a)
         len_b = len(b)
-        
         x = [[0 for y_axis in range(len_b)] for x_axis in range(len_a)]
         
         for i in range( len_a ):
@@ -66,6 +66,7 @@ def application(environ, start_response):
     
     srv_rtt_data = []
     rtt_data = []
+    rtt_data_100 = []
     rtt_list = []
     all_rtt_data = []
     cl_rtt_data = []
@@ -78,7 +79,6 @@ def application(environ, start_response):
     ssid_others_list = []
     signal_list = []
     magnetic_list = []
-    rtt_data_100 = []
     
     #x-label
     label = []      
@@ -86,10 +86,7 @@ def application(environ, start_response):
     dates= []
     tup = ()
     
-    #fig = plt.figure(figsize=(15,35))
-    #fig.subplots_adjust(hspace=0.7)
-    
-    #search hierachy of folders
+   #search hierachy of folders
     dirs = os.listdir( thedir )
     
     k = 15
@@ -97,6 +94,8 @@ def application(environ, start_response):
     
     fig = plt.figure(figsize=(12,35)) 
     fig.subplots_adjust(hspace=0.7)   
+
+    #fig.tight_layout(h_pad=1)
     
     path = thedir+'/'+ 'client'
     for root, dirs, files in os.walk(path):
@@ -107,13 +106,16 @@ def application(environ, start_response):
             dirs_arrange=dirs[0:3]
         else:            
             dirs_arrange=dirs[0:len(dirs)]
-        
+                
         #dirs_arrange = dirs[6:9]
+        
         for dirName in dirs_arrange:
+           
             subdirpath = os.path.join(path, dirName)
+#                t = datetime.datetime.strptime(dirName , "%Y-%m-%d")
             
             for subroot, subdirs, subfiles in os.walk(subdirpath):
-            
+    
                 subdirs.sort(reverse=True)
                 for file in subfiles:                    
                 
@@ -128,6 +130,8 @@ def application(environ, start_response):
                     json_data.close()
                     
                     if data is None:
+                        continue
+                    elif not data["result"]:
                         continue
                     elif data["result"] is None:
                         continue
@@ -172,8 +176,10 @@ def application(environ, start_response):
                         continue
                     elif data["result"]["network"]["measr"]["traceroute"][0]["hops"] is None:
                         continue
+                    ####
                     
-                   # Wifi
+                                                
+                    # Wifi
                     type =  data["result"]["network"]["type"]         
                     if type in 'WIFI':
                         if data["result"]["network"]["wifi"] is None:
@@ -197,6 +203,7 @@ def application(environ, start_response):
                         if data["result"]["network"]["wifi"]["current"]["signal"] is None:
                             continue
                         signal =  data["result"]["network"]["wifi"]["current"]["signal"]
+                        
                     else:
                         speed = 0 
                         ssid_eduroam = 0 
@@ -210,16 +217,17 @@ def application(environ, start_response):
                     #RAM
                     ram = data["result"]["status"]["usage"]["ramfree_mb"]
                     
-                     #magnetic_field
+                    latency_data=data["result"]["network"]["measr"]["latency"][0]["rtt_ms"]
+                    timestamp_data=data["result"]["timestamp"]
+                    
+                    #magnetic_field
                     if data["result"]["environment"]["magnetic_field"] is None:
                         continue
                     elif data["result"]["environment"]["magnetic_field"]["pow_mA"] is None:
                         continue
-                    magnetic = data["result"]["environment"]["magnetic_field"]["pow_mA"]       
-                                
-                    latency_data=data["result"]["network"]["measr"]["latency"][0]["rtt_ms"]
-                    timestamp_data=data["result"]["timestamp"]
-                    
+                    magnetic = data["result"]["environment"]["magnetic_field"]["pow_mA"]    
+                        
+                    #added by derek
                     trauceroute_AS = []
                     trauceroute_IP = []
                     trauceroute_hop = data["result"]["network"]["measr"]["traceroute"][0]["hops"]
@@ -236,7 +244,7 @@ def application(environ, start_response):
                                         
                     tup=(latency_data , 
                          timestamp_data, 
-                         datetime.datetime.fromtimestamp(timestamp_data).strftime('%d %H%M'), 
+                         datetime.datetime.fromtimestamp(timestamp_data).strftime('%d %H:%M'), 
                          numpy.average(latency_data),
                          ip_data,
                          power,
@@ -255,31 +263,31 @@ def application(environ, start_response):
                     
                     avg_value.extend(latency_data)
                     rtt_data.append(tup)
-                    
-                                    
+                   
                 if len(rtt_data) == 0:
                     continue
 
                 sorted_rtt_data = sorted(rtt_data, key=itemgetter(1))
-                    
+
+     
     latency_data_avg = numpy.average(avg_value)
+         
+    #Record the plot data each day in 7 days
+    
     
     sorted_rtt_data = [list(t) for t in sorted_rtt_data]
     for i in range(len(sorted_rtt_data)):
         if sorted_rtt_data[i][2] in label:
             continue
-        
         # remove extreme value
         temp1 = []
         for each in sorted_rtt_data[i][0]:
-            if ((each < 500)):
+            if ((each < latency_data_avg*5) or (each < 1000)):
                 temp1.append(each)  
-       
+            
         sorted_rtt_data[i][0] = temp1
-        
         if len(sorted_rtt_data[i][0]) == 0:
-                continue
-        
+            continue
                                            
         rtt_list.append(sorted_rtt_data[i][0] )
         avgs.append( numpy.average(sorted_rtt_data[i][0]) )
@@ -293,17 +301,16 @@ def application(environ, start_response):
         signal_list.append(sorted_rtt_data[i][13])
         magnetic_list.append(sorted_rtt_data[i][14])
         rtt_data_100.append(float(numpy.average(sorted_rtt_data[i][0])/100))
-                            
+    
     # pearson coefficient
-
     power_list_value,a = pearsonr(avgs, power_list)
     celsius_list_value,b = pearsonr(avgs, celsius_list)
     ram_list_value,c = pearsonr(avgs, ram_list)
     speed_list_value,d = pearsonr(avgs, speed_list)
     signal_list_value,e = pearsonr(avgs, signal_list)
     magnetic_list_value,e = pearsonr(avgs, magnetic_list)
-   
-    #print rtt_data
+    
+    # Print fig
     ax1 = fig.add_subplot(k,1,1)
     ax1.set_title( '3 days clinet latency data boxplot' )
     ax1.set_xlabel('Hour')
@@ -445,7 +452,9 @@ def application(environ, start_response):
     plt.gca().add_artist(l20) 
     
     all_rtt_data.append(sorted_rtt_data)
-
+    
+    print >> sys.stderr, 'all_rtt_data1',all_rtt_data
+                                    
     rtt_data = []
     rtt_list = []
     avgs = []
@@ -461,21 +470,22 @@ def application(environ, start_response):
     rtt_data_100 = []
     
     path_anly_ip = []
-    path_anly_as = []                                                        
-    
+    path_anly_as = []
+                         
     path = thedir+'/'+ 'server'               
-    for root, ser_dirs, files in os.walk(path):
-                               
-        ser_dirs.sort(reverse=True)    
-                                                                       
+    for root, ser_dirs, files in os.walk(path):                                                         
+
+        ser_dirs.sort(reverse=True)  
+                                                           
         if len(ser_dirs) >= 3:                  
             srv_dirs_arrange=ser_dirs[0:3]                                                            
         else:    
             srv_dirs_arrange=ser_dirs[0:len(ser_dirs)]                                                    
+                        
+        #srv_dirs_arrange = ser_dirs[6:9]
         
-        #srv_dirs_arrange = ser_dirs[6:9]                                                                                            
         for dirName in srv_dirs_arrange:   
-                                                                                       
+                                                                               
             subdirpath = os.path.join(path, dirName)     
             j = j+1                                     
             for subroot, subdirs, subfiles in os.walk(subdirpath):                            
@@ -537,90 +547,93 @@ def application(environ, start_response):
                            
                             
                     srv_rtt_data.append(tup)
-                       
-            sorted_srv_rtt_data = sorted(srv_rtt_data, key=itemgetter(1))
-                                                                             
-            aa = 0
-            print 'all_rtt_data',all_rtt_data 
-            if m < len(all_rtt_data) :
-                for i in range(len(sorted_srv_rtt_data)):
-                    if aa >= len(all_rtt_data[m]):
-                        break
-                                                            
-                    while True:
-                                        
-                        if aa < len(all_rtt_data[m]):
-                                                    
-                            if sorted_srv_rtt_data[i][1] < all_rtt_data[m][aa][1]:
-                                break
-                            
-                            if (sorted_srv_rtt_data[i][1] - all_rtt_data[m][aa][1] < 10) & (sorted_srv_rtt_data [i][4] == all_rtt_data[m][aa][4]):              
-                                
-                                rtt_list.append( sorted_srv_rtt_data[i][0] )
-                                avgs.append( sorted_srv_rtt_data[i][3] )
-                                label.append( sorted_srv_rtt_data[i][2] )
-                                cl_rtt_data.append(all_rtt_data[m][aa][3])
-                                
-                                path_anly_as.append( LevenshteinDistance(sorted_srv_rtt_data[i][5], all_rtt_data[m][aa][11]) )
-                                if all_rtt_data[m][aa][12][0] is not None:
-                                    path_anly_ip.append( LevenshteinDistance_for_ip(sorted_srv_rtt_data[i][6], all_rtt_data[m][aa][12]) )
-                                #### 
-                            aa+=1    
-                        else:
-                            break
-                        
-                                                    
-            m=m+1    
-                         
-        # pearson coefficient  
-        cl_rtt_data_value,q = pearsonr(avgs, cl_rtt_data)      
-        
-        #if len(label) != 0:                        
-        ax3 = fig.add_subplot(k,1,3)
-        ax4 = fig.add_subplot(k,1,3)
-        ax3.set_title( ' 3 days server response clinet latency data time series plot' )
-        ax3.set_xlabel('Hour')
-        ax3.set_ylabel('rtt_ms')
-        if len(label) != 0:
-            pylab.xticks(range(0,len(label)),label, rotation='vertical')
-        plt.text(25, 1200, '3 days server response clinet latency data time series plot' , fontsize=14, ha='left', va='top')
-        print >> sys.stderr, 'label',label
-        if ( cl_rtt_data_value >= 0 or cl_rtt_data_value < 0): 
-            axt3 = 'pearson coefficient = ',cl_rtt_data_value
-            ax3.annotate(axt3, xy=(1, 0), xycoords='axes fraction', fontsize=10,xytext=(-5, 5), textcoords='offset points',
-                         ha='right', va='bottom')
-        ax3, = plt.plot(avgs, label = 'match')
-        ax4, = plt.plot(cl_rtt_data, label = 'client')
-        l1 = plt.legend([ax3], ["server"], loc=1)
-        l2 = plt.legend([ax4], ["client"], loc=2) 
-        plt.gca().add_artist(l1) 
-        plt.gca().add_artist(l2)
-       
-        ax13 = fig.add_subplot(k,1,14)
-        ax13.set_title( '3 days server response clinet path tracing (AS) Levenshtein Distance' )
-        ax13.set_xlabel('Hour')
-        ax13.set_ylabel('unit')
-        if len(label) != 0:
-            pylab.xticks(range(0,len(label)),label, rotation='vertical')
-        plt.text(25, 1, '3 days server response clinet path tracing (AS) Levenshtein Distance' , fontsize=14, ha='left', va='top')
-        ax13, = plt.plot(path_anly_as, label = 'match')
-    
-        ax14 = fig.add_subplot(k,1,15)
-        ax14.set_title( '3 days server response clinet path tracing (IP) Levenshtein Distance' )
-        ax14.set_xlabel('Hour')
-        ax14.set_ylabel('unit')
-        if len(label) != 0:
-            pylab.xticks(range(0,len(label)),label, rotation='vertical')
-            #plt.text(25, 1, '3 days server response clinet path tracing (IP) Levenshtein Distance' , fontsize=14, ha='left', va='top')
-        ax14, = plt.plot(path_anly_ip, label = 'match')
-                
-        rtt_data = []
-        rtt_list = []
-        avgs = []
-        label = []
-        cl_rtt_data = []
                     
-                
+        sorted_srv_rtt_data = sorted(srv_rtt_data, key=itemgetter(1))
+                                  
+        aa = 0
+        print >> sys.stderr, 'all_rtt_data2',all_rtt_data                                                                                        
+        if m < len(all_rtt_data) :
+            
+            for i in range(len(sorted_srv_rtt_data)):
+                       
+                if aa >= len(all_rtt_data[m]):
+                    break
+                                                        
+                while True:
+                                    
+                    if aa < len(all_rtt_data[m]):
+                                                
+                        if sorted_srv_rtt_data[i][1] < all_rtt_data[m][aa][1]:
+                            break
+                                            
+                        if (sorted_srv_rtt_data[i][1] - all_rtt_data[m][aa][1] < 10) & (sorted_srv_rtt_data [i][4] == all_rtt_data[m][aa][4]):              
+                                                
+                            rtt_list.append( sorted_srv_rtt_data[i][0] )
+                            avgs.append( sorted_srv_rtt_data[i][3] )
+                            label.append( sorted_srv_rtt_data[i][2] )
+                            cl_rtt_data.append(all_rtt_data[m][aa][3])
+                            #LevenshteinDistance
+                            path_anly_as.append( LevenshteinDistance(sorted_srv_rtt_data[i][5], all_rtt_data[m][aa][11]) )
+                            if all_rtt_data[m][aa][12][0] is not None:
+                                path_anly_ip.append( LevenshteinDistance_for_ip(sorted_srv_rtt_data[i][6], all_rtt_data[m][aa][12]) )
+                            
+                        aa+=1    
+                    else:
+                        break
+                    
+                                                
+        m=m+1    
+        # pearson coefficient  
+        cl_rtt_data_value,e = pearsonr(avgs, cl_rtt_data)
+        
+        
+        print >> sys.stderr, 'label',label
+        if len(label) != 0:                        
+            ax3 = fig.add_subplot(k,1,3)
+            ax4 = fig.add_subplot(k,1,3)
+            #ax3.set_title( ' 3 days server response clinet latency data time series plot' )
+            ax3.set_xlabel('Hour')
+            ax3.set_ylabel('rtt_ms')
+            if len(label) != 0:
+                pylab.xticks(range(0,len(label)),label, rotation='vertical')
+            plt.text(15, 1500, '3 days server response clinet latency data time series plot' , fontsize=14, ha='center', va='top')
+            
+            if ( cl_rtt_data_value >= 0 or cl_rtt_data_value < 0): 
+                axt3 = 'pearson coefficient = ',cl_rtt_data_value
+                ax3.annotate(axt3, xy=(1, 0), xycoords='axes fraction', fontsize=10,xytext=(-5, 5), textcoords='offset points',
+                             ha='right', va='bottom')
+            ax3, = plt.plot(avgs, label = 'match')
+            ax4, = plt.plot(cl_rtt_data, label = 'client')
+            l1 = plt.legend([ax3], ["server"], loc=1)
+            l2 = plt.legend([ax4], ["client"], loc=2) 
+            plt.gca().add_artist(l1) 
+            plt.gca().add_artist(l2)
+           
+            ax13 = fig.add_subplot(k,1,14)
+            #ax13.set_title( '3 days server response clinet path tracing (AS) Levenshtein Distance' )
+            ax13.set_xlabel('Hour')
+            ax13.set_ylabel('unit')
+            
+            pylab.xticks(range(0,len(label)),label, rotation='vertical')
+            plt.text(15, 1, '3 days server response clinet path tracing (AS) Levenshtein Distance' , fontsize=14, ha='center', va='top')
+            ax13, = plt.plot(path_anly_as, label = 'match')
+        
+            ax14 = fig.add_subplot(k,1,15)
+            #ax14.set_title( '3 days server response clinet path tracing (IP) Levenshtein Distance' )
+            ax14.set_xlabel('Hour')
+            ax14.set_ylabel('unit')
+            #if len(label) != 0:
+            pylab.xticks(range(0,len(label)),label, rotation='vertical')
+            plt.text(15, 2, '3 days server response clinet path tracing (IP) Levenshtein Distance' , fontsize=14, ha='center', va='top')
+            ax14, = plt.plot(path_anly_ip, label = 'match')
+        
+        rtt_list=[]
+        avgs=[]
+        label=[]
+        cl_rtt_data=[]
+        path_anly_ip=[]
+        path_anly_as = []
+
     format = 'png'
     sio = cStringIO.StringIO()
     plt.savefig( sio,format="png")
@@ -630,5 +643,4 @@ def application(environ, start_response):
     start_response(status, headers)
     
         
-    return [sio.getvalue()]      
-    
+    return [sio.getvalue()]     
